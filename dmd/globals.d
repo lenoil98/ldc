@@ -276,6 +276,21 @@ struct Param
     const(char)* exefile;
     const(char)* mapfile;
 
+    /* LDC: unused function featuring syntax not supported by ltsmaster
+    // generate code for POSIX
+    @property bool isPOSIX() scope const pure nothrow @nogc @safe
+    out(result) { assert(result || isWindows); }
+    do
+    {
+        return isLinux
+            || isOSX
+            || isFreeBSD
+            || isOpenBSD
+            || isDragonFlyBSD
+            || isSolaris;
+    }
+    */
+
 version (IN_LLVM)
 {
     Array!(const(char)*) bitcodeFiles; // LLVM bitcode files passed on cmdline
@@ -297,6 +312,7 @@ version (IN_LLVM)
 
     // target stuff
     const(void)* targetTriple; // const llvm::Triple*
+    bool isUClibcEnvironment;
 
     // Codegen cl options
     bool disableRedZone;

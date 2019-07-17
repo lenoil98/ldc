@@ -67,8 +67,6 @@ bool isTargetWindowsMSVC() {
   return global.params.targetTriple->isWindowsMSVCEnvironment();
 }
 
-bool isMusl() { return global.params.targetTriple->isMusl(); }
-
 /******************************************************************************
  * Global context
  ******************************************************************************/
@@ -296,13 +294,14 @@ void DtoAssert(Module *M, Loc &loc, DValue *msg) {
 }
 
 void DtoCAssert(Module *M, Loc &loc, LLValue *msg) {
+  const auto &triple = *global.params.targetTriple;
   const auto file =
       DtoConstCString(loc.filename ? loc.filename : M->srcfile->name.toChars());
   const auto line = DtoConstUint(loc.linnum);
   const auto fn = getCAssertFunction(loc, gIR->module);
 
   llvm::SmallVector<LLValue *, 4> args;
-  if (global.params.targetTriple->isOSDarwin()) {
+  if (triple.isOSDarwin()) {
     const auto irFunc = gIR->func();
     const auto funcName =
         irFunc && irFunc->decl ? irFunc->decl->toPrettyChars() : "";
@@ -310,7 +309,8 @@ void DtoCAssert(Module *M, Loc &loc, LLValue *msg) {
     args.push_back(file);
     args.push_back(line);
     args.push_back(msg);
-  } else if (global.params.targetTriple->isOSSolaris() || isMusl()) {
+  } else if (triple.isOSSolaris() || triple.isMusl() ||
+             global.params.isUClibcEnvironment) {
     const auto irFunc = gIR->func();
     const auto funcName =
         (irFunc && irFunc->decl) ? irFunc->decl->toPrettyChars() : "";
@@ -318,8 +318,7 @@ void DtoCAssert(Module *M, Loc &loc, LLValue *msg) {
     args.push_back(file);
     args.push_back(line);
     args.push_back(DtoConstCString(funcName));
-  } else if (global.params.targetTriple->getEnvironment() ==
-             llvm::Triple::Android) {
+  } else if (triple.getEnvironment() == llvm::Triple::Android) {
     args.push_back(file);
     args.push_back(line);
     args.push_back(msg);
@@ -1757,14 +1756,20 @@ llvm::GlobalVariable *declareGlobal(const Loc &loc, llvm::Module &module,
     const auto existingType = existing->getType()->getElementType();
     if (existingType != type || existing->isConstant() != isConstant ||
         existing->isThreadLocal() != isThreadLocal) {
-      const auto existingTypeName = llvmTypeToString(existingType);
-      const auto newTypeName = llvmTypeToString(type);
       error(loc,
             "Global variable type does not match previous declaration with "
             "same mangled name: `%s`",
             mangledName.str().c_str());
-      errorSupplemental(loc, "Previous IR type: %s", existingTypeName.c_str());
-      errorSupplemental(loc, "New IR type:      %s", newTypeName.c_str());
+      const auto suppl = [&loc](const char *prefix, LLType *type,
+                                bool isConstant, bool isThreadLocal) {
+        const auto typeName = llvmTypeToString(type);
+        errorSupplemental(loc, "%s %s, %s, %s", prefix, typeName.c_str(),
+                          isConstant ? "const" : "mutable",
+                          isThreadLocal ? "thread-local" : "non-thread-local");
+      };
+      suppl("Previous IR type:", existingType, existing->isConstant(),
+            existing->isThreadLocal());
+      suppl("New IR type:     ", type, isConstant, isThreadLocal);
       fatal();
     }
     return existing;

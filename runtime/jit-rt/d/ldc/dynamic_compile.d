@@ -372,7 +372,10 @@ struct BindPayload(OF, F, int[] Index, Args...)
   OF originalFunc = null;
   struct ArgStore
   {
-    Args args;
+    import std.meta: staticMap;
+    import std.traits: Unqual;
+    alias UArgs = staticMap!(Unqual, Args);
+    UArgs args;
   }
   ArgStore argStore;
   bool registered = false;
@@ -417,8 +420,8 @@ struct BindPayload(OF, F, int[] Index, Args...)
           const ii = ParametersCount - i - 1; // reverse params
           desc[ii].data = &(argStore.args[ind]);
           desc[ii].size = (argStore.args[ind]).sizeof;
-          alias T = FuncParams[ind];
-          desc[ii].type = (isAggregateType!T || isDelegate!T ? ParamType.Aggregate : ParamType.Simple);
+          alias T = FuncParams[i];
+          desc[ii].type = (isAggregateType!T || isDelegate!T || isStaticArray!T ? ParamType.Aggregate : ParamType.Simple);
         }
       }
     }
